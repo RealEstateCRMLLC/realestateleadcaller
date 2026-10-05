@@ -16,7 +16,12 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({ where: { email: session.user.email }});
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
     const { leadId, action, agentPhone } = body;
 
     const lead = await prisma.lead.findUnique({

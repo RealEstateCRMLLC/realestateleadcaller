@@ -36,7 +36,12 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({ where: { email: session.user.email }});
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
     const { leadId, campaignType } = body;
 
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -80,7 +85,12 @@ export async function PUT(request: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email }});
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const body = await request.json();
+        let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
         const { taskId, status } = body;
 
         // Verify task ownership via the lead

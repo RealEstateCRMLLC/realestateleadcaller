@@ -5,7 +5,12 @@ import { GeocodingAdapter } from '@/lib/adapters/geocoding';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
     // Simulate parsing a common CRM payload format (e.g. Follow Up Boss / Zillow)
     const firstName = body.firstName || body.person?.firstName || 'Unknown';
