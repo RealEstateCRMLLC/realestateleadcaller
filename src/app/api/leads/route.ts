@@ -65,6 +65,10 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
+    if (!body.first_name || !body.last_name || !body.lead_type) {
+      return NextResponse.json({ error: 'first_name, last_name, and lead_type are required' }, { status: 400 });
+    }
+
     let lat: number | null = null;
     let lon: number | null = null;
 
