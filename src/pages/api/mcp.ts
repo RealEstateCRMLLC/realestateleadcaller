@@ -6,19 +6,27 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Initialize the MCP Server globally
-const server = new Server(
-  {
-    name: "jules-mls-mcp-server",
-    version: "0.1.0",
-  },
-  {
-    capabilities: {
-      tools: {},
+// One MCP Server per SSE connection: a Server can only be connected to a
+// single transport ("Already connected to a transport" on the second GET),
+// so the previous module-level singleton 500'd every reconnect. Handlers are
+// registered inside this factory so each connection gets a fresh instance.
+function createMcpServer(): Server {
+  const server = new Server(
+    {
+      name: "jules-mls-mcp-server",
+      version: "0.1.0",
     },
-  }
-);
+    {
+      capabilities: {
+        tools: {},
+      },
+    }
+  );
+  registerHandlers(server);
+  return server;
+}
 
+function registerHandlers(server: Server) {
 // Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -154,15 +162,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   throw new Error("Tool not found");
 });
+}
 
 // Store global transport instances (in memory - ephemeral for dev)
 let globalTransport: SSEServerTransport | null = null;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
-    // Initialize SSE Transport
-    globalTransport = new SSEServerTransport("/api/mcp", res as any);
-    await server.connect(globalTransport);
+    // Fresh server per connection (see createMcpServer note). Message
+    // endpoint must carry the production mount prefix when present:
+    // NEXTAUTH_URL is https://<domain>/leadcaller in prod, unset locally.
+    let messageEndpoint = "/api/mcp";
+    try {
+      const base = process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).pathname.replace(/\/$/, "") : "";
+      if (base) messageEndpoint = `${base}/api/mcp`;
+    } catch { /* keep default */ }
+    globalTransport = new SSEServerTransport(messageEndpoint, res as any);
+    await createMcpServer().connect(globalTransport);
 
     // SSEServerTransport will take over the response and keep it open
     return;
