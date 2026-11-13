@@ -33,7 +33,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "query_mls_inventory",
-        description: "Query the local MLS (Multiple Listing Service) database for available properties based on neighborhood or zipcode.",
+        description: "Query the LeadCaller CRM Lead database for leads matching a neighborhood (city) or zipcode. (Named for MLS-inventory intent; live MLS data requires the RESO feed, not yet connected - results are CRM leads, never fabricated listings.)",
         inputSchema: {
           type: "object",
           properties: {
@@ -60,28 +60,47 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Handle tool execution
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "query_mls_inventory") {
-    // Phase 10 Expanded Mock MLS response logic
-    const neighborhood = request.params.arguments?.neighborhood as string;
-    const zipcode = request.params.arguments?.zipcode as string;
+    // Real query against the LeadCaller CRM Lead table (this app has no MLS
+    // listing table; the previous implementation returned hardcoded fake
+    // listings for Downtown/Macomb/anywhere, which violated the project's
+    // no-fabricated-data rule). Matches leads by zip or city ("neighborhood").
+    // Honest empty result when nothing matches - never invented listings.
+    const neighborhood = request.params.arguments?.neighborhood as string | undefined;
+    const zipcode = request.params.arguments?.zipcode as string | undefined;
 
-    let resultText = "No listings found for that criteria.";
+    try {
+      const leads = await prisma.lead.findMany({
+        where: {
+          AND: [
+            zipcode ? { zip: zipcode } : {},
+            neighborhood ? { city: { contains: neighborhood } } : {},
+          ],
+        },
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          first_name: true, last_name: true, property_address: true,
+          city: true, state: true, zip: true, budget: true, status: true, lead_type: true,
+        },
+      });
 
-    if (neighborhood && neighborhood.toLowerCase() === "downtown") {
-        resultText = "Found 2 active listings in Downtown: 1: The Lofts at 1st St ($650k, 2bd/2ba). 2: Skyview Penthouse ($1.2M, 3bd/3ba).";
-    } else if (zipcode === "48044" || (neighborhood && neighborhood.toLowerCase().includes("macomb"))) {
-        resultText = "Found 3 active listings in Macomb (48044): 1: 123 Main St ($450k, 3bd/2ba). 2: 456 Elm St ($520k, 4bd/3ba). 3: 789 Oak Ave ($390k, 3bd/1ba).";
-    } else {
-        resultText = `Found 1 generic active listing in ${neighborhood || zipcode || 'the area'}: 999 Default Blvd ($350k, 2bd/1ba).`;
+      if (leads.length === 0) {
+        return {
+          content: [{ type: "text", text: `No leads in the CRM match ${[neighborhood, zipcode].filter(Boolean).join(' / ') || 'that criteria'}. (This tool queries the LeadCaller CRM Lead database; live MLS inventory requires the RESO feed, which is not connected yet.)` }],
+        };
+      }
+
+      const lines = leads.map((l, i) =>
+        `${i + 1}: ${l.property_address || `${l.first_name} ${l.last_name}`} (${l.city || '?'}, ${l.state || '?'} ${l.zip || ''}) - ${l.lead_type}, status ${l.status}${l.budget ? `, budget ${l.budget}` : ''}`
+      );
+      return {
+        content: [{ type: "text", text: `Found ${leads.length} CRM lead(s) matching ${[neighborhood, zipcode].filter(Boolean).join(' / ')}:\n${lines.join('\n')}\n(Source: LeadCaller CRM Lead database - not live MLS inventory.)` }],
+      };
+    } catch (e) {
+      return {
+        content: [{ type: "text", text: "Error querying the CRM lead database." }],
+      };
     }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: resultText
-        }
-      ]
-    };
   }
 
   if (request.params.name === "check_agent_availability") {
@@ -102,9 +121,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const token = settings?.apiKey;
 
         if (!token) {
-            // Fallback to mock logic if no real integration exists
+            // No calendar connected: report that honestly instead of
+            // fabricating open slots (previous mock fallback invented times).
             return {
-                content: [{ type: "text", text: `On ${date}, the agent has the following open slots: 10:00 AM, 1:30 PM, and 4:15 PM.` }]
+                content: [{ type: "text", text: `Calendar is not connected for this agent (no Google Calendar integration), so availability for ${date} cannot be checked yet. Connect Google Calendar in Settings > Integrations to enable live availability.` }]
             };
         }
 
