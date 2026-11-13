@@ -1,9 +1,9 @@
 {
-  "name": "temp_app",
-  "version": "0.6.0",
+  "name": "realestateleadcaller",
+  "version": "0.6.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3008",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

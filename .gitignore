@@ -24,7 +24,8 @@
 .DS_Store
 *.pem
 
-# debug
+# logs (transient runtime logs; databases intentionally tracked per retention policy)
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -32,6 +33,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,8 +41,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-*.db
-dev.log
-dev.log
-*.db
-dev_server.log
