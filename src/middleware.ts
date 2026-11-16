@@ -1,25 +1,38 @@
-import { withAuth } from "next-auth/middleware";
+import { getToken } from 'next-auth/jwt';
+import { NextRequest, NextResponse } from 'next/server';
 
-export default withAuth({
-  pages: {
-    signIn: "/login",
-  },
-  secret: process.env.NEXTAUTH_SECRET || "default_dev_secret_change_me_in_prod",
-});
+/**
+ * Auth protection for all LeadCaller pages + API routes.
+ *
+ * Replaces next-auth's withAuth wrapper, which never intercepted requests in
+ * this stack (Next 16 standalone + basePath): every page rendered publicly
+ * while the APIs returned 401, leaving a broken public shell. This mirrors
+ * the main CRM's hand-written middleware (proven live): valid session token
+ * passes; API calls get a JSON 401; pages redirect to /login.
+ *
+ * Public by design (own auth / signatures): /api/auth, /api/webhooks,
+ * /api/engine (cron), /api/mcp, /login, Next statics.
+ */
+export default async function middleware(req: NextRequest) {
+  const { pathname, search } = req.nextUrl;
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET || 'default_dev_secret_change_me_in_prod',
+  });
+  if (token) return NextResponse.next();
+
+  if (pathname.startsWith('/api')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const signInUrl = new URL('/login', req.url);
+  signInUrl.searchParams.set('callbackUrl', pathname + search);
+  return NextResponse.redirect(signInUrl);
+}
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api/webhooks (public webhook routes)
-     * - api/engine (cron job triggers)
-     * - api/auth (NextAuth routes)
-     * - api/mcp (Model Context Protocol endpoints)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - login (the login page itself)
-     */
-    "/((?!api/webhooks|api/engine|api/auth|api/mcp|_next/static|_next/image|favicon.ico|login).*)",
+    '/',
+    '/((?!api/auth|api/webhooks|api/engine|api/mcp|_next/static|_next/image|favicon.ico|login).*)',
   ],
 };
