@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
@@ -18,7 +19,7 @@ export default function LeadProfilePage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/leads/${resolvedParams.id}`)
+    fetch(apiUrl(`/api/leads/${resolvedParams.id}`))
       .then(res => res.json())
       .then(data => {
         setLead(data);
@@ -40,7 +41,7 @@ export default function LeadProfilePage({ params }: { params: Promise<{ id: stri
         payload = {};
       }
 
-      const res = await fetch(endpoint, {
+      const res = await fetch(apiUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -52,7 +53,7 @@ export default function LeadProfilePage({ params }: { params: Promise<{ id: stri
       alert(result.message || (action === 'direct_mail' ? 'Direct mail task created successfully' : 'Action triggered successfully'));
 
       // Refresh lead data
-      const updatedRes = await fetch(`/api/leads/${resolvedParams.id}`);
+      const updatedRes = await fetch(apiUrl(`/api/leads/${resolvedParams.id}`));
       const updatedData = await updatedRes.json();
       setLead(updatedData);
     } catch (e: any) {

@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const loadStats = () => {
-    fetch('/api/dashboard')
+    fetch(apiUrl('/api/dashboard'))
       .then(res => res.json())
       .then(data => setStats(data));
   };
@@ -33,7 +34,7 @@ export default function Dashboard() {
 
   const runEngine = async () => {
     try {
-      const res = await fetch('/api/engine/tick', { method: 'POST' });
+      const res = await fetch(apiUrl('/api/engine/tick'), { method: 'POST' });
       const data = await res.json();
       alert(`Engine ran successfully. Processed ${data.processed} leads.`);
       loadStats();
@@ -44,7 +45,7 @@ export default function Dashboard() {
 
   const runScoring = async () => {
     try {
-      await fetch('/api/inngest', {
+      await fetch(apiUrl('/api/inngest'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'scoring/evaluate-pool' })

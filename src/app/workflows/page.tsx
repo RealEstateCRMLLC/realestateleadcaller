@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -15,7 +16,7 @@ export default function WorkflowsPage() {
   useEffect(() => {
     const fetchWorkflows = async () => {
       try {
-        const res = await fetch('/api/workflows');
+        const res = await fetch(apiUrl('/api/workflows'));
         if (!res.ok) throw new Error('Failed to fetch workflows');
         const data = await res.json();
         setWorkflows(data);

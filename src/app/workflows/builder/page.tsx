@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -18,7 +19,7 @@ export default function WorkflowBuilderPage() {
   useEffect(() => {
     const initData = async () => {
       try {
-        const res = await fetch('/api/workflows');
+        const res = await fetch(apiUrl('/api/workflows'));
         if (res.ok) {
           const data = await res.json();
           // Load the first workflow for MVP demonstration
@@ -55,7 +56,7 @@ export default function WorkflowBuilderPage() {
     if (!workflowId) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/workflows', {
+      const res = await fetch(apiUrl('/api/workflows'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workflowId, steps })

@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -12,7 +13,7 @@ export default function DirectMailPage() {
 
   const fetchTasks = async () => {
     try {
-      const res = await fetch('/api/direct-mail');
+      const res = await fetch(apiUrl('/api/direct-mail'));
       if (!res.ok) throw new Error('Failed to fetch direct mail tasks');
       const data = await res.json();
       setTasks(data);
@@ -26,7 +27,7 @@ export default function DirectMailPage() {
   useEffect(() => {
     const initFetch = async () => {
       try {
-        const res = await fetch('/api/direct-mail');
+        const res = await fetch(apiUrl('/api/direct-mail'));
         if (!res.ok) throw new Error('Failed to fetch direct mail tasks');
         const data = await res.json();
         setTasks(data);
@@ -42,7 +43,7 @@ export default function DirectMailPage() {
   const markAsSent = async (taskId: string) => {
     setError(null);
     try {
-      const res = await fetch('/api/direct-mail', {
+      const res = await fetch(apiUrl('/api/direct-mail'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId, status: 'Sent' })

@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useState, useEffect } from 'react';
 
@@ -21,7 +22,7 @@ export default function KnowledgeBasePage() {
 
   const fetchSnippets = async () => {
     try {
-      const res = await fetch('/api/settings/knowledge');
+      const res = await fetch(apiUrl('/api/settings/knowledge'));
       if (res.ok) {
         setSnippets(await res.json());
       }
@@ -40,7 +41,7 @@ export default function KnowledgeBasePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch('/api/settings/knowledge', {
+      const res = await fetch(apiUrl('/api/settings/knowledge'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, answer, category }),
@@ -60,7 +61,7 @@ export default function KnowledgeBasePage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this snippet?')) return;
     try {
-      const res = await fetch(`/api/settings/knowledge/${id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/settings/knowledge/${id}`), { method: 'DELETE' });
       if (res.ok) {
         setSnippets(snippets.filter(s => s.id !== id));
       }

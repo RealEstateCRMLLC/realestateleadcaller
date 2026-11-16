@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Device, Call } from '@twilio/voice-sdk';
@@ -15,7 +16,7 @@ export default function NativeDialer() {
     useEffect(() => {
         const fetchToken = async () => {
             try {
-                const res = await fetch('/api/twilio/token');
+                const res = await fetch(apiUrl('/api/twilio/token'));
                 if (!res.ok) {
                     const data = await res.json();
                     throw new Error(data.error || 'Failed to fetch Twilio token');

@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -23,7 +24,7 @@ export default function LeadsPage() {
         if (statusFilter) params.append('status', statusFilter);
         if (typeFilter) params.append('type', typeFilter);
 
-        const res = await fetch(`/api/leads?${params.toString()}`);
+        const res = await fetch(apiUrl(`/api/leads?${params.toString()}`));
         if (!res.ok) throw new Error('Failed to fetch leads');
         const data = await res.json();
         setLeads(data);

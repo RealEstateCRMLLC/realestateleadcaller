@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
@@ -36,7 +37,7 @@ export default function MapPage() {
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const res = await fetch('/api/leads');
+        const res = await fetch(apiUrl('/api/leads'));
         if (res.ok) {
           const data = await res.json();
           // Only keep leads that have coordinates
@@ -53,7 +54,7 @@ export default function MapPage() {
     fetchLeads();
 
     // Subscribe to SSE for live map updates
-    const eventSource = new EventSource('/api/sse');
+    const eventSource = new EventSource(apiUrl('/api/sse'));
 
     eventSource.onmessage = (event) => {
       if (event.data === 'heartbeat') return;

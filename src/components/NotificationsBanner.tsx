@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/api-base';
 
 import { useEffect, useState } from 'react';
 
@@ -16,7 +17,7 @@ export default function NotificationsBanner() {
     // Poll for notifications every 15 seconds
     const fetchNotifications = async () => {
       try {
-        const res = await fetch('/api/notifications');
+        const res = await fetch(apiUrl('/api/notifications'));
         if (res.ok) {
           const data = await res.json();
           setNotifications(data);
@@ -34,7 +35,7 @@ export default function NotificationsBanner() {
   const dismissNotification = async (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
     try {
-      await fetch('/api/notifications', {
+      await fetch(apiUrl('/api/notifications'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
