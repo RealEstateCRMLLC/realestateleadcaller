@@ -36,8 +36,13 @@ export default async function middleware(req: NextRequest) {
   // alongside the fresh login cookie and bounce off every page. Clear both
   // cookie spellings so the next login sticks.
   if (req.cookies.has('next-auth.session-token') || req.cookies.has('__Secure-next-auth.session-token')) {
-    res.cookies.delete('next-auth.session-token');
-    res.cookies.delete('__Secure-next-auth.session-token');
+    // Cookies may be scoped to / or to the mount path (older deploys) - a
+    // deletion only clears the cookie whose Path matches, so expire both.
+    for (const name of ['next-auth.session-token', '__Secure-next-auth.session-token']) {
+      for (const path of ['/', req.nextUrl.basePath || '/']) {
+        res.cookies.set(name, '', { path, maxAge: 0 });
+      }
+    }
   }
   return res;
 }
