@@ -30,7 +30,16 @@ export default async function middleware(req: NextRequest) {
   // carries this app's prefix (/leadcaller).
   const signInUrl = new URL(`${req.nextUrl.basePath || ''}/login`, req.url);
   signInUrl.searchParams.set('callbackUrl', pathname + search);
-  return NextResponse.redirect(signInUrl);
+  const res = NextResponse.redirect(signInUrl);
+  // Break stale-cookie loops: if a session cookie was sent but failed
+  // verification (e.g. secret rotated), the browser would keep resending it
+  // alongside the fresh login cookie and bounce off every page. Clear both
+  // cookie spellings so the next login sticks.
+  if (req.cookies.has('next-auth.session-token') || req.cookies.has('__Secure-next-auth.session-token')) {
+    res.cookies.delete('next-auth.session-token');
+    res.cookies.delete('__Secure-next-auth.session-token');
+  }
+  return res;
 }
 
 export const config = {
