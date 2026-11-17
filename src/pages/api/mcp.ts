@@ -4,6 +4,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { PrismaClient } from "@prisma/client";
 import { getVoiceProvider } from "../../lib/adapters";
+import { getToken } from "next-auth/jwt";
 
 const prisma = new PrismaClient();
 
@@ -296,7 +297,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Store global transport instances (in memory - ephemeral for dev)
 let globalTransport: SSEServerTransport | null = null;
 
+/**
+ * MCP requires authentication: a NextAuth session cookie (browser /
+ * same-origin clients) OR `Authorization: Bearer <LC_MCP_TOKEN>` for
+ * external AI clients. This endpoint was previously wide open - lead
+ * names and phone numbers were readable by anyone who connected.
+ */
+async function requireMcpAuth(req: NextApiRequest): Promise<boolean> {
+  const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (process.env.LC_MCP_TOKEN && bearer && bearer === process.env.LC_MCP_TOKEN) return true;
+  const token = await getToken({
+    req: req as never,
+    secret: process.env.NEXTAUTH_SECRET || 'default_dev_secret_change_me_in_prod',
+  });
+  return !!token;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!(await requireMcpAuth(req))) {
+    res.status(401).json({ error: 'Unauthorized - MCP requires a LeadCaller session or LC_MCP_TOKEN bearer' });
+    return;
+  }
+
   if (req.method === 'GET') {
     // Fresh server per connection (see createMcpServer note). Message
     // endpoint must carry the production mount prefix when present:
