@@ -3,6 +3,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { PrismaClient } from "@prisma/client";
+import { getVoiceProvider } from "../../lib/adapters";
 
 const prisma = new PrismaClient();
 
@@ -40,6 +41,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             neighborhood: { type: "string", description: "The neighborhood name (e.g., 'Downtown')" },
             zipcode: { type: "string", description: "The 5-digit zipcode" },
           }
+        },
+      },
+      {
+        name: "list_callable_leads",
+        description: "List CRM leads that can be called right now: has a phone number and status is not 'Do Not Contact'. Read-only; makes no calls.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "number", description: "Max leads to return (default 10, max 50)" },
+          }
+        },
+      },
+      {
+        name: "start_outbound_call",
+        description: "Start an outbound AI voice call to one lead via Vapi. WRITE ACTION with an approval gate: you must pass confirm: true (the human operator approved this call). Refuses when the lead is Do Not Contact, has no phone, or Vapi is not configured - it never places a simulated/mock call.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            leadId: { type: "string", description: "The CRM lead ID to call" },
+            confirm: { type: "boolean", description: "Must be true - explicit human approval to place this call" },
+          },
+          required: ["leadId", "confirm"]
+        },
+      },
+      {
+        name: "get_lead_call_history",
+        description: "Read a lead's call history (outcomes and durations) from the CRM CallLog. Read-only.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            leadId: { type: "string", description: "The CRM lead ID" },
+          },
+          required: ["leadId"]
         },
       },
       {
@@ -178,6 +212,81 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [{ type: "text", text: `Error checking calendar.` }]
         };
     }
+  }
+
+  if (request.params.name === "list_callable_leads") {
+    const limit = Math.min((request.params.arguments?.limit as number) || 10, 50);
+    const leads = await prisma.lead.findMany({
+      where: { phone: { not: null }, status: { not: 'Do Not Contact' } },
+      take: limit,
+      orderBy: [{ urgency_score: 'desc' }, { createdAt: 'desc' }],
+      select: { id: true, first_name: true, last_name: true, phone: true, city: true, state: true, status: true, lead_type: true },
+    });
+    if (leads.length === 0) {
+      return { content: [{ type: "text", text: "No callable leads right now (every lead either has no phone or is Do Not Contact)." }] };
+    }
+    const lines = leads.map((l, i) => `${i + 1}: [${l.id}] ${l.first_name} ${l.last_name} - ${l.phone} (${l.city || '?'}, ${l.state || '?'}) - ${l.lead_type}, status ${l.status}`);
+    return { content: [{ type: "text", text: `${leads.length} callable lead(s):\n${lines.join('\n')}` }] };
+  }
+
+  if (request.params.name === "get_lead_call_history") {
+    const leadId = request.params.arguments?.leadId as string;
+    const logs = await prisma.callLog.findMany({
+      where: { leadId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    if (logs.length === 0) {
+      return { content: [{ type: "text", text: `No calls logged for lead ${leadId} yet.` }] };
+    }
+    const lines = logs.map((c) => `- ${c.createdAt.toISOString()} outcome=${c.outcome || 'unknown'} duration=${c.duration ?? '?'}s`);
+    return { content: [{ type: "text", text: `${logs.length} call(s) for lead ${leadId}:\n${lines.join('\n')}` }] };
+  }
+
+  if (request.params.name === "start_outbound_call") {
+    const leadId = request.params.arguments?.leadId as string;
+    const confirm = request.params.arguments?.confirm as boolean | undefined;
+
+    // Approval gate: an AI may never place a call on its own initiative.
+    if (confirm !== true) {
+      return {
+        content: [{ type: "text", text: "Approval required: outbound calls place a real phone call to a real person. Ask the human operator to approve, then call again with confirm: true. No call was placed." }],
+      };
+    }
+
+    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!lead) {
+      return { content: [{ type: "text", text: `Lead ${leadId} not found. No call placed.` }] };
+    }
+    if (lead.status === 'Do Not Contact') {
+      return { content: [{ type: "text", text: `Lead ${leadId} is marked Do Not Contact. Refusing to call.` }] };
+    }
+    if (!lead.phone) {
+      return { content: [{ type: "text", text: `Lead ${leadId} has no phone number. No call placed.` }] };
+    }
+
+    // Telephony must be genuinely configured - never fall back to a mock
+    // call and report success (the workflow provider does that; MCP must not).
+    const settings = await prisma.integrationSettings.findMany({
+      where: { provider: { in: ['vapi', 'vapi_assistant_id', 'vapi_phone_number_id'] }, userId: lead.userId || undefined },
+    });
+    const have = (p: string) => settings.some((s) => s.provider === p && !!s.apiKey);
+    if (!have('vapi') || !have('vapi_assistant_id') || !have('vapi_phone_number_id')) {
+      return {
+        content: [{ type: "text", text: "Voice calling is not configured for this workspace yet: Vapi API key, assistant ID, and phone number ID are required (Settings in LeadCaller). No call was placed and no simulated call was made." }],
+      };
+    }
+
+    const placed = await getVoiceProvider().callLead(leadId);
+    if (!placed) {
+      return { content: [{ type: "text", text: `Call to lead ${leadId} could not be initiated (provider returned failure). No call is in progress.` }] };
+    }
+    await prisma.leadActivity.create({
+      data: { leadId, type: 'call', description: 'Outbound AI voice call initiated via MCP (operator-approved)' },
+    });
+    return {
+      content: [{ type: "text", text: `Outbound call initiated to ${lead.first_name} ${lead.last_name} (${lead.phone}). The call outcome will arrive via the Vapi webhook and land in the lead's call history (get_lead_call_history).` }],
+    };
   }
 
   throw new Error("Tool not found");

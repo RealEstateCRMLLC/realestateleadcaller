@@ -164,10 +164,11 @@ export class VapiVoiceProvider implements VoiceProvider {
       if (!lead || !lead.phone) throw new Error('Lead phone number missing');
 
       const settings = await prisma.integrationSettings.findMany({
-        where: { provider: { in: ['vapi', 'vapi_assistant_id'] }, userId: lead.userId || undefined }
+        where: { provider: { in: ['vapi', 'vapi_assistant_id', 'vapi_phone_number_id'] }, userId: lead.userId || undefined }
       });
       const vapiKey = settings.find(s => s.provider === 'vapi')?.apiKey;
       const vapiAssistantId = settings.find(s => s.provider === 'vapi_assistant_id')?.apiKey;
+      const vapiPhoneNumberId = settings.find(s => s.provider === 'vapi_phone_number_id')?.apiKey;
 
       if (!vapiKey) {
         console.warn('Vapi credentials missing, falling back to mock provider');
@@ -177,6 +178,12 @@ export class VapiVoiceProvider implements VoiceProvider {
       if (!vapiAssistantId) {
         console.warn('Vapi Assistant ID missing, falling back to mock provider');
         return new MockVoiceProvider().callLead(leadId);
+      }
+
+      if (!vapiPhoneNumberId) {
+        // Without a real outbound number Vapi rejects the call; fail loudly
+        // here instead of sending a placeholder id and reporting success.
+        throw new Error('Vapi phone number ID not configured (Settings: vapi_phone_number_id)');
       }
 
       // Fetch knowledge base snippets to inject into the AI
@@ -197,7 +204,7 @@ export class VapiVoiceProvider implements VoiceProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phoneNumberId: 'your-vapi-phone-number-id', // Assuming static or from settings in a real app
+          phoneNumberId: vapiPhoneNumberId,
           customer: {
             number: lead.phone,
             name: `${lead.first_name} ${lead.last_name}`,
@@ -210,7 +217,7 @@ export class VapiVoiceProvider implements VoiceProvider {
             },
             clientMessages: ["tool-calls"],
             serverMessages: ["tool-calls", "end-of-call-report"],
-            serverUrl: "https://your-production-url.com/api/webhooks/vapi-tools",
+            serverUrl: process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL.replace(/\/$/, '')}/api/webhooks/vapi-tools` : undefined,
             tools: [
               {
                 type: "function",
