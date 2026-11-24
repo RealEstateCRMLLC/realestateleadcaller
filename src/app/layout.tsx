@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import NotificationsBanner from "@/components/NotificationsBanner";
 import NativeDialer from "@/components/NativeDialer";
+import { SessionProvider } from "./SessionProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,9 +31,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
-        <NotificationsBanner />
-        <NativeDialer />
+        <SessionProvider>
+          {children}
+          <NotificationsBanner />
+          <NativeDialer />
+        </SessionProvider>
       </body>
     </html>
   );

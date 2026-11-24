@@ -2,6 +2,7 @@
 import { apiUrl } from '@/lib/api-base';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { Device, Call } from '@twilio/voice-sdk';
 
 export default function NativeDialer() {
@@ -12,8 +13,15 @@ export default function NativeDialer() {
     const [phoneNumber, setPhoneNumber] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
 
-    // Initialize Twilio Device on mount if token available
+    const { status: sessionStatus } = useSession();
+
+    // Initialize Twilio Device on mount if token available. Only with a
+    // signed-in session: this dialer is mounted globally (including the
+    // login page), and fetching a voice token while signed out produced
+    // a 401 console error on every page. Signed-out visitors simply get
+    // the Offline state.
     useEffect(() => {
+        if (sessionStatus !== 'authenticated') return;
         const fetchToken = async () => {
             try {
                 const res = await fetch(apiUrl('/api/twilio/token'));
@@ -24,13 +32,18 @@ export default function NativeDialer() {
                 const data = await res.json();
                 setToken(data.token);
             } catch (err: any) {
-                console.error("Token fetch error:", err);
+                // Telephony simply not configured yet is an expected
+                // state (no Twilio keys), not an error worth a console
+                // alarm on every page. Surface it in the dialer only.
+                if (!/Missing Twilio configuration/i.test(err.message || '')) {
+                    console.error("Token fetch error:", err);
+                }
                 setError(err.message);
             }
         };
 
         fetchToken();
-    }, []);
+    }, [sessionStatus]);
 
     useEffect(() => {
         const setupDevice = (accessToken: string) => {
